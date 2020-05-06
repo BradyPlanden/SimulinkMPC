@@ -20,7 +20,7 @@ int quiet = 1;
 int one = 1;
 
 
-void mpc(int T, int m, int n, int niters, double kappa,
+void mpc(int T, int m, const int n, int niters, double kappa,
         double *A, double *B, double *Q, double *Qf, double *R, double *xmin,
         double *xmax, double *umin, double *umax, double *X0, double *U0, double *x0,
         double *U, double *X)
