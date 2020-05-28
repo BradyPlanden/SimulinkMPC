@@ -10,7 +10,7 @@
 
 /* ------------------------Local Variables----------------------------------------------- */
 
-mwSignedIndex ione = 1;
+ptrdiff_t ione = 1;
 const int itwo = 2;
 const int ithree = 3;
 const int iseven = 7;
@@ -18,10 +18,11 @@ const double fone = 1;
 const double ftwo = 2;
 const double fzero = 0;
 const double fmone = -1;
-int quiet = 1;
+int quiet = 0;
 int one = 1;
 
 /* ---------------------- Parameter Definitions ----------------------------------------- */
+
 /* At = Transpose of A
  * Bt = Transpose of B
  * n = Number of state dimensions
@@ -29,16 +30,17 @@ int one = 1;
  * eyen = identity matrix dimsion n
  * eyem = identity matrix dimension m
  * Q = 
+ */
 
+// ------------------------MPC----------------------------------------------------------- */
 
-/* ------------------------MPC----------------------------------------------------------- */
-    
 void fmpcsolve(const double *A, const double *B, const double *At, const double *Bt, const double *eyen, const double *eyem, 
-        const double *Q, const double *R, const double *Qf, const double *zmax, const double *zmin, const double *x, const double *z0, const mwSignedIndex T, const mwSignedIndex n, const mwSignedIndex m,
-        const mwSignedIndex nz, const mwSignedIndex niters, const double kappa, double *z, double *U, double *X) 
+        const double *Q, const double *R, const double *Qf, const double *zmax, const double *zmin, const double *x, const double *z0, int T, ptrdiff_t n, ptrdiff_t m,
+        ptrdiff_t nz, ptrdiff_t niters, const double kappa, double *z, double *U, double *X) 
 {
-    mwSignedIndex maxiter = niters;
+    /* fmpcsolve variable setup */
     int iiter, i, j, cont;
+    ptrdiff_t maxiter = niters;
     double alpha = 0.01;
     double beta = 1;
     double tol = 0.5;
@@ -50,6 +52,11 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
     double *rd, *rp, *newrd, *newrp;
     double *dptr, *dptr1, *dptr2, *dptr3;
     double *newnu, *newz, *newCtnu;
+    
+    /* Function variable allocation */
+    //double *A, *B, *At, *Bt, *eyen, *eyem, *Q, *R, *Qf;
+    //double *zmax, *zmin, *x, *z0, kappa, *z, *U, *X;
+    //mwSignedIndex T, n, m, nz, niters;
 
     /* memory allocation */
     b = malloc(sizeof(double)*T*n);
@@ -169,16 +176,9 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
         }
     }
     
-    /* ---- Shifting z to z0 for next step ------- */
-    
-    dptr = z0; dptr1 = z;
-    for (i = 0; i < nz; i++)
-    {
-        *dptr = *dptr1;
-        dptr++; dptr1++;
-    }
+ 
     /* ---- Creating X and U Vectors ------- */
-    
+   /*
     dptr = z;
     for (i = 0; i < T; i++)
     {
@@ -193,8 +193,16 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
             dptr++;
         }
     }
+    */
+    /* ---- Shifting z to z0 for next step ------- */
+     
+     dptr = z0; dptr1 = z;
+     for (i = 0; i < nz; i++)
+     {
+         *dptr = *dptr1;
+         dptr++; dptr1++;
+     }
     
-
     free(b); free(dnu); free(dz); free(nu); free(Ctnu);
     free(z); free(gp); free(hp); free(gf); free(rp); free(rd);
     free(newnu); free(newz); free(newCtnu); free(newgf); free(newhp);
@@ -205,10 +213,10 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
 /*------------------ dz = Delta z / dnu = Delta Nu ----------------------------- */
 void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         double *eyem, double *Q, double *R, double *Qf, double *hp, double *rd, 
-        double *rp, mwSignedIndex T, mwSignedIndex n, mwSignedIndex m, mwSignedIndex nz, double kappa, double *dnu, double *dz)
+        double *rp, int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz, double kappa, double *dnu, double *dz)
 {
     int i,j,nT;
-    mwSignedIndex info;
+    ptrdiff_t info;
     double *dptr, *dptr1, *dptr2, *dptr3, *temp, *tempmatn, *tempmatm;
     double *PhiQ, *PhiR, *Yd, *Yud, *Ld, *Lld, *Ctdnu, *gam, *v, *be, *rdmCtdnu;
     double *PhiinvQAt, *PhiinvRBt, *PhiinvQeye, *PhiinvReye, *CPhiinvrd;
@@ -324,7 +332,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr = dptr-m*n; dptr1 = PhiR+m*m*i;
         dposv("l",&m,&n,dptr1,&m,dptr,&m,&info);
         //dposv("l",&m,&n,dptr1,&m,dptr,&m,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
-        //dptr = PhiinvReye+m*m*i; dptr1 = eyem;
+        dptr = PhiinvReye+m*m*i; dptr1 = eyem;
         for (j = 0; j < m*m; j++)
         {
             *dptr = *dptr1;
@@ -536,7 +544,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione);
         //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
     }
-
+    
     /* form Ctdnu */
     for (i = 0; i < T-1; i++)
     {
@@ -595,7 +603,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
 /* ----------------------------computes rd and rp ----------------------------- */
 /* ----------- rd is the dual residual, rp is the primal residual ------------- */
 void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, double *nu, 
-        double *gf, double *gp, double *b, mwSignedIndex T, mwSignedIndex n, mwSignedIndex m, mwSignedIndex nz, 
+        double *gf, double *gp, double *b, int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz,
         double kappa, double *rd, double *rp, double *Ctnu)
 {
     int i, j;
@@ -687,7 +695,7 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
 
 /* ------------------------------- computes gf, gp and hp ------------------------------- */
 void gfgphp(double *Q, double *R, double *Qf, double *zmax, double *zmin, double *z,
-        mwSignedIndex T, mwSignedIndex n, mwSignedIndex m, mwSignedIndex nz, double *gf, double *gp, double *hp)
+       int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz, double *gf, double *gp, double *hp)
 {
     int i;
     double *dptr, *dptr1, *dptr2;
@@ -743,10 +751,10 @@ void gfgphp(double *Q, double *R, double *Qf, double *zmax, double *zmin, double
 
 /* -------------------------- resd, resp, and res ------------------------------ */
 /* ---------- resd is the dual residual, resp is the primal residual ----------- */
-void resdresp(double *rd, double *rp, mwSignedIndex T, mwSignedIndex n, mwSignedIndex nz, double *resd, 
+void resdresp(double *rd, double *rp, int T, ptrdiff_t n, ptrdiff_t nz, double *resd,
         double *resp, double *res)
 {
-    mwSignedIndex nnu = T*n;
+    ptrdiff_t nnu = T*n;
     *resp = dnrm2(&nnu,rp,&ione);
     *resd = dnrm2(&nz,rd,&ione);
     *res = sqrt((*resp)*(*resp)+(*resd)*(*resd));
