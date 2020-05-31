@@ -4,13 +4,13 @@
 #include <time.h>
 #include <math.h>
 #include "f_mpc.h"
-#include "blas.h"
-#include "lapack.h"
+#include "blas_int.h"
+#include "lapack_int.h"
 
 
 /* ------------------------Local Variables----------------------------------------------- */
 
-ptrdiff_t ione = 1;
+const int ione = 1;
 const int itwo = 2;
 const int ithree = 3;
 const int iseven = 7;
@@ -18,7 +18,7 @@ const double fone = 1;
 const double ftwo = 2;
 const double fzero = 0;
 const double fmone = -1;
-int quiet = 0;
+int quiet = 1;
 int one = 1;
 
 /* ---------------------- Parameter Definitions ----------------------------------------- */
@@ -29,18 +29,25 @@ int one = 1;
  * m = Number of control dimensions
  * eyen = identity matrix dimsion n
  * eyem = identity matrix dimension m
- * Q = 
+ * Q = System Cost Weights
+ * R = Control Input Cost Weights
+ * niters = maximum number of optmisation iterations
+ * T = Prediction Horizon 
+ * nz = T*(n+m)
+ * z = matrix of [U,X] 
+ * zmax = max value of constraints for u & x in z matrix
+ * zmin = max value of constraints for u & x in z matrix
  */
 
-// ------------------------MPC----------------------------------------------------------- */
+/* ------------------------MPC----------------------------------------------------------- */
 
 void fmpcsolve(const double *A, const double *B, const double *At, const double *Bt, const double *eyen, const double *eyem, 
-        const double *Q, const double *R, const double *Qf, const double *zmax, const double *zmin, const double *x, const double *z0, int T, ptrdiff_t n, ptrdiff_t m,
-        ptrdiff_t nz, ptrdiff_t niters, const double kappa, double *z, double *U, double *X) 
+        const double *Q, const double *R, const double *Qf, double *zmax, double *zmin, double *x, double *z0, int T,  int n,  int m,
+         int nz,  int niters, double kappa, double *z, double *U, double *X) 
 {
     /* fmpcsolve variable setup */
     int iiter, i, j, cont;
-    ptrdiff_t maxiter = niters;
+    int maxiter = niters;
     double alpha = 0.01;
     double beta = 1;
     double tol = 0.5;
@@ -52,11 +59,7 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
     double *rd, *rp, *newrd, *newrp;
     double *dptr, *dptr1, *dptr2, *dptr3;
     double *newnu, *newz, *newCtnu;
-    
-    /* Function variable allocation */
-    //double *A, *B, *At, *Bt, *eyen, *eyem, *Q, *R, *Qf;
-    //double *zmax, *zmin, *x, *z0, kappa, *z, *U, *X;
-    //mwSignedIndex T, n, m, nz, niters;
+
 
     /* memory allocation */
     b = malloc(sizeof(double)*T*n);
@@ -81,8 +84,7 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
 
     for (i = 0; i < n*T; i++) nu[i] = 0;
     for (i = 0; i < n*T; i++) b[i] = 0;
-    dgemv("n",&n,&n,&fone,A,&n,x,&ione,&fzero,b,&ione);
-   // dgemv(CblasRowMajor,CblasNoTrans,n,n,fone,A,n,x,ione,fzero,b,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    dgemv("n",&n,&n,&fone,A,&n,x,&ione,&fzero,b,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     dptr = z; dptr1 = z0;
     for (i = 0; i < nz; i++) 
     {
@@ -178,7 +180,7 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
     
  
     /* ---- Creating X and U Vectors ------- */
-   /*
+   
     dptr = z;
     for (i = 0; i < T; i++)
     {
@@ -193,9 +195,9 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
             dptr++;
         }
     }
-    */
+    
     /* ---- Shifting z to z0 for next step ------- */
-     
+    
      dptr = z0; dptr1 = z;
      for (i = 0; i < nz; i++)
      {
@@ -213,10 +215,10 @@ void fmpcsolve(const double *A, const double *B, const double *At, const double 
 /*------------------ dz = Delta z / dnu = Delta Nu ----------------------------- */
 void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         double *eyem, double *Q, double *R, double *Qf, double *hp, double *rd, 
-        double *rp, int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz, double kappa, double *dnu, double *dz)
+        double *rp, int T,  int n,  int m,  int nz, double kappa, double *dnu, double *dz)
 {
     int i,j,nT;
-    ptrdiff_t info;
+    int info;
     double *dptr, *dptr1, *dptr2, *dptr3, *temp, *tempmatn, *tempmatm;
     double *PhiQ, *PhiR, *Yd, *Yud, *Ld, *Lld, *Ctdnu, *gam, *v, *be, *rdmCtdnu;
     double *PhiinvQAt, *PhiinvRBt, *PhiinvQeye, *PhiinvReye, *CPhiinvrd;
@@ -307,8 +309,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-n*n; dptr1 = PhiQ+n*n*i;
-        dposv("l",&n,&n,dptr1,&n,dptr,&n,&info);
-        //dposv("l",&n,&n,dptr1,&n,dptr,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
+        dposv("l",&n,&n,dptr1,&n,dptr,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
         dptr = PhiinvQeye+n*n*i; dptr1 = eyen;
         for (j = 0; j < n*n; j++)
         {
@@ -316,10 +317,8 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-n*n; dptr1 = PhiQ+n*n*i;
-        dtrtrs("l","n","n",&n,&n,dptr1,&n,dptr,&n,&info);
-        dtrtrs("l","t","n",&n,&n,dptr1,&n,dptr,&n,&info);
-        //dtrtrs("l","n","n",&n,&n,dptr1,&n,dptr,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
-        //dtrtrs("l","t","n",&n,&n,dptr1,&n,dptr,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
+        dtrtrs("l","n","n",&n,&n,dptr1,&n,dptr,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
+        dtrtrs("l","t","n",&n,&n,dptr1,&n,dptr,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
     }
     for (i = 0; i < T; i++)
     {
@@ -330,8 +329,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-m*n; dptr1 = PhiR+m*m*i;
-        dposv("l",&m,&n,dptr1,&m,dptr,&m,&info);
-        //dposv("l",&m,&n,dptr1,&m,dptr,&m,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
+        dposv("l",&m,&n,dptr1,&m,dptr,&m,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
         dptr = PhiinvReye+m*m*i; dptr1 = eyem;
         for (j = 0; j < m*m; j++)
         {
@@ -339,10 +337,8 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-m*m; dptr1 = PhiR+m*m*i;
-        dtrtrs("l","n","n",&m,&m,dptr1,&m,dptr,&m,&info);
-        dtrtrs("l","t","n",&m,&m,dptr1,&m,dptr,&m,&info);
-        //dtrtrs("l","n","n",&m,&m,dptr1,&m,dptr,&m,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
-        //dtrtrs("l","t","n",&m,&m,dptr1,&m,dptr,&m,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
+        dtrtrs("l","n","n",&m,&m,dptr1,&m,dptr,&m,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
+        dtrtrs("l","t","n",&m,&m,dptr1,&m,dptr,&m,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
     }
     
     /* form Yd and Yud */
@@ -359,8 +355,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr2++; dptr3++;
     }
     dptr2 = dptr2-n*n;
-    dgemm("n","n",&n,&n,&m,&fone,B,&n,PhiinvRBt,&m,&fone,dptr2,&n);
-    //dgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,n,n,m,fone,B,n,PhiinvRBt,n,fone,dptr2,n); // Computes a real, double precision, matrix-matrix product with general matrices.
+    dgemm("n","n",&n,&n,&m,&fone,B,&n,PhiinvRBt,&m,&fone,dptr2,&n); // Computes a real, double precision, matrix-matrix product with general matrices.
     for (i = 1; i < T; i++)
     {
         dptr = Yd+n*n*i; dptr1 = PhiinvQeye+n*n*i;
@@ -370,11 +365,9 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr1 = PhiinvRBt+m*n*i; dptr = dptr-n*n;
-        dgemm("n","n",&n,&n,&m,&fone,B,&n,dptr1,&m,&fone,dptr,&n); 
-        //dgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,n,n,m,fone,B,n,dptr1,n,fone,dptr,n); // Computes a real, double precision, matrix-matrix product with general matrices.
+        dgemm("n","n",&n,&n,&m,&fone,B,&n,dptr1,&m,&fone,dptr,&n); // Computes a real, double precision, matrix-matrix product with general matrices.
         dptr1 = PhiinvQAt+n*n*(i-1);
-        dgemm("n","n",&n,&n,&n,&fone,A,&n,dptr1,&n,&fone,dptr,&n);
-        //dgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,n,n,n,fone,A,n,dptr1,n,fone,dptr,n); // Computes a real, double precision, matrix-matrix product with general matrices.
+        dgemm("n","n",&n,&n,&n,&fone,A,&n,dptr1,&n,&fone,dptr,&n); // Computes a real, double precision, matrix-matrix product with general matrices.
     }
 
     /* compute Lii */
@@ -385,8 +378,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr++; dptr1++; 
     }
     dptr = dptr-n*n; 
-    dposv("l",&n,&ione,dptr,&n,temp,&n,&info);
-    //dposv("L",&n,&one,dptr,&n,temp,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
+    dposv("l",&n,&one,dptr,&n,temp,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
     for (i = 1; i < T; i++)
     {
         dptr = Ld+n*n*(i-1); dptr1 = Yud+n*n*(i-1); dptr2 = Lld+n*n*(i-1);
@@ -396,8 +388,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr2++; dptr1++;
         }
         dptr2 = dptr2-n*n;
-        dtrtrs("l","n","n",&n,&n,dptr,&n,dptr2,&n,&info);
-        //dtrtrs("l","n","n",&n,&n,dptr,&n,dptr2,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
+        dtrtrs("l","n","n",&n,&n,dptr,&n,dptr2,&n,&info); //Solves a system of linear equations with a triangular coefficient matrix, with multiple right-hand sides.
         dptr1 = tempmatn;
         for (j = 0; j < n*n; j++)
         {
@@ -405,8 +396,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr1++; dptr2++;
         }
         dptr1 = dptr1-n*n; dptr2 = dptr2-n*n;
-        dgemm("t","n",&n,&n,&n,&fone,dptr1,&n,eyen,&n,&fzero,dptr2,&n);
-        //dgemm(CblasRowMajor,CblasTrans,CblasNoTrans,n,n,n,fone,dptr1,n,eyen,n,fzero,dptr2,n); // Computes a real, double precision, matrix-matrix product with general matrices.
+        dgemm("t","n",&n,&n,&n,&fone,dptr1,&n,eyen,&n,&fzero,dptr2,&n); // Computes a real, double precision, matrix-matrix product with general matrices.
         dptr = Ld+n*n*i; dptr1 = Yd+n*n*i;
         for (j = 0; j < n*n; j++)
         {
@@ -414,10 +404,8 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-n*n;
-        dgemm("n","t",&n,&n,&n,&fmone,dptr2,&n,dptr2,&n,&fone,dptr,&n);
-        dposv("l",&n,&ione,dptr,&n,temp,&n,&info);
-        //dgemm(CblasRowMajor,CblasNoTrans,CblasTrans,n,n,n,fmone,dptr2,n,dptr2,n,fone,dptr,n); // Computes a real, double precision, matrix-matrix product with general matrices.
-        //dposv("L",&n,&one,dptr,&n,temp,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides.
+        dgemm("n","t",&n,&n,&n,&fmone,dptr2,&n,dptr2,&n,&fone,dptr,&n); // Computes a real, double precision, matrix-matrix product with general matrices.
+        dposv("l",&n,&ione,dptr,&n,temp,&n,&info); //Computes the solution to the system of linear equations with a symmetric or Hermitian positive-definite coefficient matrix A and multiple right-hand sides. 
     }
 
     /* compute CPhiinvrd */
@@ -428,10 +416,8 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr++; dptr1++;
     }
     dptr = dptr-n;
-    dtrsv("l","n","n",&n,PhiQ,&n,dptr,&ione);
-    dtrsv("l","t","n",&n,PhiQ,&n,dptr,&ione);
-    //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,n,PhiQ,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-    //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,PhiQ,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dtrsv("l","n","n",&n,PhiQ,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dtrsv("l","t","n",&n,PhiQ,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
     dptr2 = temp; dptr1 = rd;
     for (i = 0; i < m; i++)
     {
@@ -439,12 +425,9 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr2++; dptr1++;
     }
     dptr2 = dptr2-m;
-    dtrsv("l","n","n",&m,PhiR,&m,dptr2,&ione);
-    dtrsv("l","t","n",&m,PhiR,&m,dptr2,&ione);
-    dgemv("n",&n,&m,&fmone,B,&n,temp,&ione,&fone,dptr,&ione);
-    //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,m,PhiR,m,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-    //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,m,PhiR,m,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-    //dgemv(CblasRowMajor,CblasNoTrans,n,m,fmone,B,m,temp,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    dtrsv("l","n","n",&m,PhiR,&m,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dtrsv("l","t","n",&m,PhiR,&m,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dgemv("n",&n,&m,&fmone,B,&n,temp,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     
     for (i = 1; i < T; i++)
     {
@@ -455,10 +438,8 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-n; dptr3 = PhiQ+n*n*i;
-        dtrsv("l","n","n",&n,dptr3,&n,dptr,&ione);
-        dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione);
-        //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-        //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","n","n",&n,dptr3,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
         dptr2 = temp; dptr1 = rd+i*(m+n);
         for (j = 0; j < m; j++)
         {
@@ -466,12 +447,9 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr2++; dptr1++;
         }
         dptr3 = PhiR+m*m*i; dptr2 = dptr2-m;
-        dtrsv("l","n","n",&m,dptr3,&m,dptr2,&ione);
-        dtrsv("l","t","n",&m,dptr3,&m,dptr2,&ione);
-        dgemv("n",&n,&m,&fmone,B,&n,temp,&ione,&fone,dptr,&ione);
-        //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,m,dptr3,m,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-        //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,m,dptr3,m,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-        //dgemv(CblasRowMajor,CblasNoTrans,n,m,fmone,B,m,temp,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dtrsv("l","n","n",&m,dptr3,&m,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","t","n",&m,dptr3,&m,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dgemv("n",&n,&m,&fmone,B,&n,temp,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr2 = temp; dptr1 = rd+(i-1)*(n+m)+m;
         for (j = 0; j < n; j++)
         {
@@ -479,12 +457,9 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr2++; dptr1++;
         }
         dptr3 = PhiQ+n*n*(i-1); dptr2 = dptr2-n;
-        dtrsv("l","n","n",&n,dptr3,&n,dptr2,&ione);
-        dtrsv("l","t","n",&n,dptr3,&n,dptr2,&ione);
-        dgemv("n",&n,&n,&fmone,A,&n,temp,&ione,&fone,dptr,&ione);
-        //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,n,dptr3,n,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-        //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,dptr3,n,dptr2,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
-        //dgemv(CblasRowMajor,CblasNoTrans,n,n,fmone,A,n,temp,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dtrsv("l","n","n",&n,dptr3,&n,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","t","n",&n,dptr3,&n,dptr2,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dgemv("n",&n,&n,&fmone,A,&n,temp,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     }
 
     /* form be */
@@ -503,8 +478,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr++; dptr1++;
     }
     dptr = dptr-n;
-    dtrsv("l","n","n",&n,Ld,&n,dptr,&ione);
-    //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,n,Ld,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dtrsv("l","n","n",&n,Ld,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
     for (i = 1; i < T; i++)
     {
         dptr = v+i*n; dptr1 = v+(i-1)*n; dptr2 = be+i*n; 
@@ -514,11 +488,10 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr2++;
         }
         dptr = dptr-n; dptr3 = Lld+n*n*(i-1);
-        dgemv("n",&n,&n,&fmone,dptr3,&n,dptr1,&ione,&fmone,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,n,n,fmone,dptr3,n,dptr1,ione,fmone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&n,&fmone,dptr3,&n,dptr1,&ione,&fmone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr3 = Ld+n*n*i;
-        dtrsv("l","n","n",&n,dptr3,&n,dptr,&ione);
-        //dtrsv(CblasRowMajor,CblasLower,CblasNoTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","n","n",&n,dptr3,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+      
     }
     dptr = dnu+n*(T-1); dptr1 = v+n*(T-1);
     for (i = 0; i < n; i++)
@@ -527,8 +500,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr++; dptr1++;
     }
     dptr = dptr-n; dptr3 = Ld+n*n*(T-1);
-    dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione);
-   // dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+    dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
     for (i = T-1; i > 0; i--)
     {
         dptr = dnu+n*(i-1); dptr1 = dnu+n*i; dptr2 = v+n*(i-1); 
@@ -538,19 +510,17 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr2++;
         }
         dptr = dptr-n; dptr3 = Lld+n*n*(i-1);
-        dgemv("t",&n,&n,&fmone,dptr3,&n,dptr1,&ione,&fone,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasTrans,n,n,fmone,dptr3,n,dptr1,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("t",&n,&n,&fmone,dptr3,&n,dptr1,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr3 = Ld+n*n*(i-1);
-        dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione);
-        //dtrsv(CblasRowMajor,CblasLower,CblasTrans,CblasNonUnit,n,dptr3,n,dptr,ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        dtrsv("l","t","n",&n,dptr3,&n,dptr,&ione); //Solves a system of linear equations whose coefficients are in a triangular matrix.
+        
     }
     
     /* form Ctdnu */
     for (i = 0; i < T-1; i++)
     {
         dptr = Ctdnu+i*(n+m); dptr1 = dnu+i*n;
-        dgemv("n",&m,&n,&fmone,Bt,&m,dptr1,&ione,&fzero,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,m,n,fmone,Bt,n,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&m,&n,&fmone,Bt,&m,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr = Ctdnu+i*(n+m)+m; dptr2 = dnu+(i+1)*n;
         for (j = 0; j < n; j++)
         {
@@ -558,13 +528,12 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
             dptr++; dptr1++;
         }
         dptr = dptr-n;
-        dgemv("n",&n,&n,&fmone,At,&n,dptr2,&ione,&fone,dptr,&ione);
-       // dgemv(CblasRowMajor,CblasNoTrans,n,n,fmone,At,n,dptr2,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&n,&fmone,At,&n,dptr2,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
+       
     }
     
     dptr = Ctdnu+(T-1)*(n+m); dptr1 = dnu+(T-1)*n;
-    dgemv("n",&m,&n,&fmone,Bt,&m,dptr1,&ione,&fzero,dptr,&ione);
-    //dgemv(CblasRowMajor,CblasNoTrans,m,n,fmone,Bt,n,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    dgemv("n",&m,&n,&fmone,Bt,&m,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     dptr = dptr+m; 
     for (i = 0; i < n; i++)
     {
@@ -583,15 +552,15 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
     {
         dptr = dz+(i+1)*m+i*n; dptr1 = rdmCtdnu+(i+1)*m+i*n;
         dptr2 = PhiinvQeye+n*n*i;
-        dgemv("n",&n,&n,&fone,dptr2,&n,dptr1,&ione,&fzero,dptr,&ione);
-       // dgemv(CblasRowMajor,CblasNoTrans,n,n,fone,dptr2,n,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&n,&fone,dptr2,&n,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
+       
     }
     for (i = 0; i < T; i++)
     {
         dptr = dz+i*(m+n); dptr1 = rdmCtdnu+i*(m+n);
         dptr2 = PhiinvReye+m*m*i;
-        dgemv("n",&m,&m,&fone,dptr2,&m,dptr1,&ione,&fzero,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,m,m,fone,dptr2,m,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&m,&m,&fone,dptr2,&m,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
+       
     }
     free(PhiQ); free(PhiR); free(PhiinvQAt); free(PhiinvRBt); free(PhiinvQeye);
     free(PhiinvReye); free(CPhiinvrd); free(Yd); free(Yud); free(Ld); free(Lld);
@@ -603,7 +572,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
 /* ----------------------------computes rd and rp ----------------------------- */
 /* ----------- rd is the dual residual, rp is the primal residual ------------- */
 void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, double *nu, 
-        double *gf, double *gp, double *b, int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz,
+        double *gf, double *gp, double *b, int T,  int n,  int m,  int nz,
         double kappa, double *rd, double *rp, double *Ctnu)
 {
     int i, j;
@@ -620,7 +589,7 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
         dptr++; dptr1++;
     }
     dgemv("n",&n,&m,&fmone,B,&n,z,&ione,&fone,Cz,&ione); // Computing Cz from B*z eqn.
-    //dgemv(CblasRowMajor,CblasNoTrans,n,m,fmone,B,m,z,ione,fone,Cz,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+  
     for (i = 2; i <= T; i++)
     {
         dptr = Cz+(i-1)*n; dptr1 = z+m+(i-2)*(n+m); 
@@ -631,11 +600,10 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
             dptr++; dptr2++;
         }
         dptr = dptr-n; 
-        dgemv("n",&n,&n,&fmone,A,&n,dptr1,&ione,&fone,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,n,n,fmone,A,n,dptr1,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&n,&fmone,A,&n,dptr1,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr1 = dptr1+n;
-        dgemv("n",&n,&m,&fmone,B,&n,dptr1,&ione,&fone,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,n,m,fmone,B,m,dptr1,ione,fone,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&m,&fmone,B,&n,dptr1,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        
     }
     /*
     dptr = Cz+(T-1)*n; dptr1 = z+m+(T-2)*(n+m);
@@ -654,8 +622,7 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
     dptr = Ctnu; dptr1 = Ctnu+m; dptr2 = nu;
     for (i = 1; i <= T-1; i++)
     {
-        dgemv("t",&n,&m,&fmone,B,&n,dptr2,&ione,&fzero,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasTrans,n,m,fmone,B,m,dptr2,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("t",&n,&m,&fmone,B,&n,dptr2,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr = dptr+n+m;
         for (j = 0; j < n; j++)
         {
@@ -663,12 +630,10 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
             dptr1++; dptr2++;
         }
         dptr1 = Ctnu+m+(i-1)*(n+m);
-        dgemv("t",&n,&n,&fmone,A,&n,dptr2,&ione,&fone,dptr1,&ione);
-        //dgemv(CblasRowMajor,CblasTrans,n,n,fmone,A,n,dptr2,ione,fone,dptr1,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("t",&n,&n,&fmone,A,&n,dptr2,&ione,&fone,dptr1,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr1 = dptr1+n+m;
     }
-    dgemv("t",&n,&m,&fmone,B,&n,dptr2,&ione,&fzero,dptr,&ione);
-    //dgemv(CblasRowMajor,CblasTrans,n,m,fmone,B,m,dptr2,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    dgemv("t",&n,&m,&fmone,B,&n,dptr2,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     dptr = Ctnu+nz-n; dptr1 = nu+(T-1)*n;
     for (i = 0; i < n; i++)
     {
@@ -695,7 +660,7 @@ void rdrp(double *A, double *B, double *Q, double *R, double *Qf, double *z, dou
 
 /* ------------------------------- computes gf, gp and hp ------------------------------- */
 void gfgphp(double *Q, double *R, double *Qf, double *zmax, double *zmin, double *z,
-       int T, ptrdiff_t n, ptrdiff_t m, ptrdiff_t nz, double *gf, double *gp, double *hp)
+       int T,  int n,  int m,  int nz, double *gf, double *gp, double *hp)
 {
     int i;
     double *dptr, *dptr1, *dptr2;
@@ -732,29 +697,25 @@ void gfgphp(double *Q, double *R, double *Qf, double *zmax, double *zmin, double
     dptr = gf; dptr1 = z; 
     for (i = 0; i < T-1; i++)
     {
-        dgemv("n",&m,&m,&ftwo,R,&m,dptr1,&ione,&fzero,dptr,&ione);
-       // dgemv(CblasRowMajor,CblasNoTrans,m,m,ftwo,R,m,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&m,&m,&ftwo,R,&m,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr = dptr+m; dptr1 = dptr1+m;
-        dgemv("n",&n,&n,&ftwo,Q,&n,dptr1,&ione,&fzero,dptr,&ione);
-        //dgemv(CblasRowMajor,CblasNoTrans,n,n,ftwo,Q,n,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+        dgemv("n",&n,&n,&ftwo,Q,&n,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
         dptr = dptr+n; dptr1 = dptr1+n;
     }
-    dgemv("n",&m,&m,&ftwo,R,&m,dptr1,&ione,&fzero,dptr,&ione);
-    //dgemv(CblasRowMajor,CblasNoTrans,m,m,ftwo,R,m,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    dgemv("n",&m,&m,&ftwo,R,&m,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     dptr = dptr+m; dptr1 = dptr1+m;
-    dgemv("n",&n,&n,&ftwo,Qf,&n,dptr1,&ione,&fzero,dptr,&ione);
-    //dgemv(CblasRowMajor,CblasNoTrans,n,n,ftwo,Qf,n,dptr1,ione,fzero,dptr,ione); // Computes a real, double precision matrix-vector product using a general matrix.
-
+    dgemv("n",&n,&n,&ftwo,Qf,&n,dptr1,&ione,&fzero,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
+    
     free(gp1); free(gp2);
     return;
 }
 
 /* -------------------------- resd, resp, and res ------------------------------ */
 /* ---------- resd is the dual residual, resp is the primal residual ----------- */
-void resdresp(double *rd, double *rp, int T, ptrdiff_t n, ptrdiff_t nz, double *resd,
+void resdresp(double *rd, double *rp, int T,  int n,  int nz, double *resd,
         double *resp, double *res)
 {
-    ptrdiff_t nnu = T*n;
+    int nnu = T*n;
     *resp = dnrm2(&nnu,rp,&ione);
     *resd = dnrm2(&nz,rd,&ione);
     *res = sqrt((*resp)*(*resp)+(*resd)*(*resd));
