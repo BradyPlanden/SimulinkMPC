@@ -462,7 +462,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dgemv("n",&n,&n,&fmone,A,&n,temp,&ione,&fone,dptr,&ione); // Computes a real, double precision matrix-vector product using a general matrix.
     }
 
-    /* form be */
+    /* Step 1: Form beta in block elimination  */
     dptr = be; dptr1 = rp; dptr2 = CPhiinvrd;
     for (i = 0; i < n*T; i++)
     {
@@ -470,7 +470,7 @@ void dnudz(double *A, double *B, double *At, double *Bt, double *eyen,
         dptr++; dptr1++; dptr2++;
     }
 
-    /* solve for dnu */
+    /* Step 2: Solve for dnu in block elimination */
     dptr = v; dptr1 = be;
     for (i = 0; i < n; i++)
     {
